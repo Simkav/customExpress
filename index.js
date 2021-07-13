@@ -59,13 +59,13 @@ const routes = [
     controller: baseController
   }
 ]
-async function baseController ({ route, data }) {
+async function baseController ({ route, data }) { // ZACHEM ROUTE?
   return 'hello world'
 }
 async function baseValidator (context) {
   return {
     data: {
-      params: context.req.params
+      params: context.req.params // ETO WHO?
     }
   }
 }
@@ -95,7 +95,8 @@ class Router extends Readable {
     if (!route) {
       this._context.res.writeHead(404).end('Not found \n')
     } else {
-      this.push(route)
+      this.push({ route, context: this._context })
+      this.push(null)
     }
   }
 }
@@ -104,15 +105,41 @@ class Validator extends Transform {
   constructor () {
     super(options)
   }
-  _transform (chunk, encoding, done) {
-    
+
+  async _transform (chunk, encoding, done) {
+    const {
+      route: { validator },
+      route,
+      context
+    } = chunk
+    if (validator) {
+      const data = await validator(context)
+      context.data = data
+    }
+    this.push({ route, context })
+  }
+}
+
+class Executor extends Transform {
+  constructor () {
+    super(options)
+  }
+  async _transform (chunk, encoding, done) {
+    const {
+      route: { controller },
+      context
+    } = chunk
+    const data = await controller(context)
+    this.push(data + '\n')
   }
 }
 
 const server = http.createServer((req, res) => {
   const context = { req, res }
   const router = new Router(routes, context)
-  pipeline(router, res, err => {
+  const validator = new Validator()
+  const executor = new Executor()
+  pipeline(router, validator, executor, res, err => {
     if (err) {
       console.log(err)
       sendError(err, res)
