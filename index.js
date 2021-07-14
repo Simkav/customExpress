@@ -131,6 +131,7 @@ class Executor extends Transform {
     } = chunk
     const data = await controller(context)
     this.push(data + '\n')
+    this.push(null)
   }
 }
 
